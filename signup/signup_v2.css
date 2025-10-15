@@ -1,0 +1,105 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #E2B74B !important;
+    font-family: "Suranna", serif;
+}
+
+.suranna-regular {
+    font-family: "Suranna", serif;
+    font-weight: 400;
+}
+
+.brand a {
+    font-size: 32px;
+    letter-spacing: 1px;
+}
+
+.navbar {
+    background-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.background-image {
+    position: absolute;
+    top: 85px;
+    left: 0;
+    width: 55%;
+    border-top-right-radius: 250px;
+    border-bottom-right-radius: 250px;
+    height: 100%;
+    background-image: url('./image/banner.webp');
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
+    transition: all 0.4s ease-in-out;
+}
+
+/* Signup box */
+.login-box {
+    background-color: rgba(255, 255, 255, 0.93);
+    padding: 35px;
+    border-radius: 20px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+    animation: fadeIn 0.6s ease-in;
+}
+
+h3 {
+    font-size: 2rem;
+    color: #222;
+}
+
+.btn-dark {
+    background-color: #000;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    transition: all 0.3s ease-in-out;
+}
+
+.btn-dark:hover {
+    background-color: #222;
+    transform: scale(1.03);
+}
+
+/* Links */
+a {
+    text-decoration: none;
+}
+
+a.text-danger:hover {
+    text-decoration: underline;
+}
+
+/* Responsive tweaks */
+@media (max-width: 992px) {
+    .background-image {
+        width: 50%;
+        border-radius: 0 180px 180px 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .background-image {
+        display: none;
+    }
+    .login-box {
+        padding: 25px;
+    }
+}
+
+@media (max-width: 576px) {
+    h3 {
+        font-size: 1.5rem;
+    }
+    .login-box {
+        padding: 20px;
+    }
+    .brand a {
+        font-size: 26px;
+    }
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

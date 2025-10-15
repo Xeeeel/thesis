@@ -1,0 +1,19 @@
+body {
+  font-family: "Arial", sans-serif;
+}
+
+h3 {
+  font-family: "Suranna", serif; /* As seen in the image */
+}
+
+.seller-icon {
+  font-size: 1.5rem;
+}
+
+.container-fluid.bg-light {
+  padding-top: 20px;
+}
+
+.navbar {
+  padding: 1rem 2rem;
+}

@@ -1,0 +1,169 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #E2B74B !important;
+    font-family: "Suranna", serif;
+}
+
+.suranna-regular {
+    font-family: "Suranna", serif;
+    font-weight: 400;
+}
+
+.brand a {
+    font-size: 32px;
+    letter-spacing: 1px;
+}
+
+.navbar {
+    background-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.background-image {
+    position: absolute;
+    top: 85px;
+    left: 0;
+    width: 55%;
+    border-top-right-radius: 250px;
+    border-bottom-right-radius: 250px;
+    height: 100%;
+    background-image: url('./image/banner.webp');
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
+    transition: all 0.4s ease-in-out;
+}
+
+/* Signup box */
+.login-box {
+    background-color: rgba(255, 255, 255, 0.93);
+    padding: 35px;
+    border-radius: 20px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+    animation: fadeIn 0.6s ease-in;
+}
+
+h3 {
+    font-size: 2rem;
+    color: #222;
+}
+
+.btn-dark {
+    background-color: #000;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    transition: all 0.3s ease-in-out;
+}
+
+.btn-dark:hover {
+    background-color: #222;
+    transform: scale(1.03);
+}
+
+/* Links */
+a {
+    text-decoration: none;
+}
+
+a.text-danger:hover {
+    text-decoration: underline;
+}
+
+/* Lock image container styling */
+.login-box img {
+    display: block;
+    margin: 0 auto 20px;  /* Automatically center the image */
+    max-width: 80px; /* Ensure the image doesn't overflow */
+    max-height: 80px; /* Optional: Control max height */
+}
+
+/* OTP Input Adjustments */
+.otp-input-group {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.otp-input-group input {
+    width: 50px;
+    height: 50px;
+    text-align: center;
+    font-size: 20px;
+    margin: 0;
+    border-radius: 10px;
+    border: 2px solid #ddd;
+    outline: none;
+    background-color: #f7f7f7;
+}
+
+.otp-input-group input:focus {
+    border-color: #28a745;
+    background-color: #f8f9fa;
+}
+
+/* Error Messages */
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+/* Resend Code Link */
+.resend-link {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.resend-link:hover {
+    text-decoration: underline;
+}
+
+/* Responsive tweaks */
+@media (max-width: 992px) {
+    .background-image {
+        width: 100%;  /* Full width for smaller screens */
+        border-radius: 0;
+    }
+    .login-box {
+        padding: 25px;
+    }
+}
+
+@media (max-width: 768px) {
+    .background-image {
+        display: none;  /* Hide image on smaller screens */
+    }
+    .login-box {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 576px) {
+    h3 {
+        font-size: 1.5rem; /* Adjust title font size */
+    }
+    .login-box {
+        padding: 20px;
+    }
+    .brand a {
+        font-size: 26px;
+    }
+
+    .otp-input-group input {
+        width: 40px;  /* Adjust input field size on small devices */
+        height: 40px;
+        font-size: 18px;
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

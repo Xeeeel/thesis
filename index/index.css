@@ -1,0 +1,67 @@
+.navbar-dark .nav-item .nav-link {
+    color: #fff;
+}
+  
+.navbar-dark .nav-item .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    border-radius: 0.25rem;
+    color: #fff;
+}
+  
+.fa-li {
+    position: relative;
+    left: 0;
+}
+
+.suranna-regular {
+    font-family: "Suranna", serif;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.brand {
+    font-size: 30px;
+}
+
+/* Banner Section */
+.banner-section {
+    background: linear-gradient(45deg, #000000, #ffcc00);
+    color: white;
+    text-align: center;
+    padding: 4rem 2rem;
+    border-radius: 1rem;
+}
+
+.banner-section .btn-warning {
+    background-color: #ffd700;
+    color: black;
+    font-size: 1.25rem;
+    padding: 0.75rem 2rem;
+    border-radius: 30px;
+}
+
+/* Featured Categories */
+.featured-categories {
+    background-color: #f8f9fa;
+    padding: 3rem 0;
+}
+
+.featured-categories h3 {
+    font-family: "Suranna", serif;
+    margin-bottom: 2rem;
+    font-size: 2rem;
+}
+
+.featured-categories img {
+    width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.featured-categories p {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+}

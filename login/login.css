@@ -1,0 +1,61 @@
+.body {
+    margin: 0;
+    padding: 0;
+    background-color: #E2B74B;  /* Matching background */
+}
+
+.suranna-regular {
+    font-family: "Suranna", serif;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.brand a {
+    font-size: 30px;
+}
+
+
+.login-page {
+    height: 100vh;  /* Full viewport height */
+}
+
+.login-box {
+    background-color: rgba(255, 255, 255, 0.9);  /* Transparent white box */
+    padding: 20px;
+}
+
+.btn-light {
+    border-radius: 50%;
+    padding: 10px;
+}
+
+.btn-dark {
+    background-color: black;
+    color: white;
+}
+
+h3 {
+    font-size: 1.8rem;
+}
+
+a {
+    text-decoration: none;
+}
+
+a.text-danger:hover {
+    text-decoration: underline;  /* Optional effect */
+}
+
+.background-image {
+    position: absolute;
+    top: 85px;
+    left: 0;
+    width: 55%;
+    border-top-right-radius: 250px 250px;
+    border-bottom-right-radius: 250px 250px;
+    height: 100%;
+    background-image: url('./image/banner.webp');
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
+}
