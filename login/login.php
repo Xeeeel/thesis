@@ -115,7 +115,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             <p class="text-center mt-3">
               No Account?
-              <a href="http://localhost/cartsy/sign-up/sign-up.php" class="text-danger">Sign Up Here</a>
+              <a href="http://localhost/cartsy/signup/signup.php" class="text-danger">Sign Up Here</a>
             </p>
           </div>
         </div>

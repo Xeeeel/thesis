@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Verify OTP - Cartsy</title>
-  <link rel="stylesheet" href="verify_v1.css">
+  <link rel="stylesheet" href="test.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Suranna&display=swap" rel="stylesheet">
 </head>
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
           <?php endif; ?>
 
-          <p class="text-center"><a class="text-danger" href="resend-otp.php" name="resend_otp">Resend Code</a></p>
+          <p class="text-center"><a class="text-danger" href="beta_resend-otp.php" name="resend_otp">Resend Code</a></p>
           <button class="btn btn-dark w-100" type="submit">Verify OTP</button>
         </form>
       </div>

@@ -99,7 +99,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // 5) Stash who to verify, then move to OTP page
         $_SESSION['pending_user_id'] = $userId;
         $_SESSION['pending_email']   = $inputEmail;
-        header("Location: verify-otp_v1.php");
+        header("Location: verify-otp.php");
         exit;
       }
     } catch (PDOException $ex) {
@@ -121,7 +121,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <title>Cartsy - Sign Up</title>
 
     <!-- EXACT same design resources -->
-    <link rel="stylesheet" href="signup_v2.css" />
+    <link rel="stylesheet" href="signup_v1.css" />
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet"
