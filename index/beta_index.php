@@ -1,50 +1,43 @@
 <?php
-session_start(); // Start the session to access user data
-$servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "cartsy";
+session_start();
+require_once __DIR__ . '/../config/db_config.php'; // Include the database configuration
+$pdo = db(); // Database connection from db_config.php
 
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+// Ensure the user is logged in; if not, redirect to the login page
+if (empty($_SESSION['user_id'])) {
+    header("Location: http://localhost/cartsy/login/login.php"); // Redirect to login if not authenticated
+    exit();
 }
+
+// Fetch user data based on the user ID from the session
+$userId = $_SESSION['user_id'];
+$stmt = $pdo->prepare("SELECT id, email, name FROM users WHERE id = ?");
+$stmt->execute([$userId]);
+$user = $stmt->fetch();
+
+
+if (!$user) {
+    // If the user does not exist in the database (shouldn't happen if session is valid)
+    unset($_SESSION['user_id']);
+    header("Location: http://localhost/cartsy/login/login.php");
+    exit();
+}
+
+// Default to 'pending' if seller_status is not set (fallback)
+$seller_status = isset($user['seller_status']) ? $user['seller_status'] : 'pending';
+
+
 
 // Check if the user has an approved product
-$user_id = $_SESSION['id']; // Ensure the user is logged in
-$check_sql = "SELECT * FROM products WHERE seller_id = ? AND product_status = 'approved'";
-$stmt = $conn->prepare($check_sql);
-$stmt->bind_param("i", $user_id);
+$has_approved_product_stmt = $pdo->prepare("SELECT COUNT(*) FROM products WHERE user_id = ? AND product_status = 'approved'");
+$has_approved_product_stmt->execute([$userId]);
+$has_approved_product = $has_approved_product_stmt->fetchColumn() > 0;
+
+// Modify the query to select products with "approved" status and "Available" status
+$sql = "SELECT product_id, product_name, price, thumbnail, condition_name FROM products WHERE product_status = 'approved' AND status = 'Available'";  
+$stmt = $pdo->prepare($sql);
 $stmt->execute();
-$result = $stmt->get_result();
-$has_approved_product = $result->num_rows > 0;
-
-// Handle the heart click event (save product)
-if (isset($_POST['save_product'])) {
-    $product_id = $_POST['product_id'];
-
-    if ($user_id && $product_id) {
-        // Check if the product is already saved
-        $check_sql = "SELECT * FROM saved_products WHERE user_id = ? AND product_id = ?";
-        $stmt = $conn->prepare($check_sql);
-        $stmt->bind_param("ii", $user_id, $product_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        if ($result->num_rows == 0) {
-            // If not already saved, insert into saved_products table
-            $save_sql = "INSERT INTO saved_products (user_id, product_id) VALUES (?, ?)";
-            $stmt = $conn->prepare($save_sql);
-            $stmt->bind_param("ii", $user_id, $product_id);
-            $stmt->execute();
-        }
-    }
-}
-
-// Modify the query to only select products with "approved" status
-$sql = "SELECT product_id, product_name, price, thumbnail, condition_name FROM products WHERE product_status = 'approved' and status = 'Available'";  
-$result = $conn->query($sql);
+$products = $stmt->fetchAll();
 ?>
 
 <!DOCTYPE html>
@@ -230,7 +223,17 @@ $result = $conn->query($sql);
             </form>
 
             <!-- Sell Button -->
-            <a href="<?php echo $has_approved_product ? 'http://localhost/cartsy/seller/test-1-0.php' : 'http://localhost/cartsy/seller/test-1.php'; ?>" class="btn btn-outline-dark me-3">Sell</a>
+            <?php
+            // Conditionally set the URL based on the user's seller status
+            if ($seller_status === 'pending') {
+                // Redirect to verification page if seller_status is 'pending'
+                $sell_url = 'http://localhost/cartsy/seller/test-1.php'; // Update this with your verification page URL
+            } else {
+                // Otherwise, link to the regular selling page
+                $sell_url = 'http://localhost/cartsy/seller/test-1-0.php'; // Update this URL as per your create listing page
+            }
+            ?>
+            <a href="<?= $sell_url ?>" class="btn btn-outline-dark me-3">Sell</a>
 
             <!-- Saved Products Button -->
             <a href="http://localhost/cartsy/saved/test-6.php" class="btn btn-outline-danger me-3">
@@ -369,13 +372,13 @@ $result = $conn->query($sql);
 
         <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 row-cols-xl-5 g-4">
           <?php
-          if ($result && $result->num_rows > 0) {
-              while ($row = $result->fetch_assoc()) {
-                  $product_id = htmlspecialchars($row['product_id']);
-                  $product_name = htmlspecialchars($row['product_name']);
-                  $price = htmlspecialchars($row['price']);
-                  $condition_name = htmlspecialchars($row['condition_name']);
-                  $thumbnail = !empty($row['thumbnail']) ? "/cartsy/seller/" . htmlspecialchars($row['thumbnail']) : "/cartsy/assets/default-image.jpg"; // Fallback image
+          if ($products && count($products) > 0) {
+              foreach ($products as $product) {
+                  $product_id = htmlspecialchars($product['product_id']);
+                  $product_name = htmlspecialchars($product['product_name']);
+                  $price = htmlspecialchars($product['price']);
+                  $condition_name = htmlspecialchars($product['condition_name']);
+                  $thumbnail = !empty($product['thumbnail']) ? "/cartsy/seller/" . htmlspecialchars($product['thumbnail']) : "/cartsy/assets/default-image.jpg"; // Fallback image
 
                   // Heart button click form
                   echo "
