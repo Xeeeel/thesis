@@ -85,7 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       $pdo->prepare("
         INSERT INTO user_otps (user_id, otp_hash, purpose, expires_at, attempt_count, last_sent_at)
-        VALUES (?, ?, 'email_verify', DATE_ADD(UTC_TIMESTAMP(), INTERVAL 5 MINUTE), 0, UTC_TIMESTAMP())
+        VALUES (?, ?, 'email_verify', DATE_ADD(UTC_TIMESTAMP(), INTERVAL 20 MINUTE), 0, UTC_TIMESTAMP())
       ")->execute([$userId, $otpHash]);
 
       // 4) Send email

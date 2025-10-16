@@ -1,22 +1,13 @@
 <?php
-session_start();  // Start session to track login status
-
-// CSRF Token to protect against CSRF attacks
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));  // Generate a secure token
-}
-
-// Database connection
-$conn = new mysqli("localhost", "root", "", "cartsy");
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+session_start();
+require_once __DIR__ . '/../config/db_config.php'; // Include the database configuration
+$pdo = db();
 
 $loginError = "";
 $inputUsername = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Validate CSRF token
+    // CSRF Token validation (if necessary)
     if ($_POST['csrf_token'] != $_SESSION['csrf_token']) {
         die("Invalid CSRF token!");
     }
@@ -24,105 +15,98 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $inputUsername = trim($_POST['username']);
     $password = trim($_POST['password']);
 
+    // Check if both username and password are provided
     if (empty($inputUsername) || empty($password)) {
         $loginError = "Username and password are required.";
     } else {
-        // Prepare and bind
-        $stmt = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
-        $stmt->bind_param("s", $inputUsername);
-        $stmt->execute();
-        $stmt->bind_result($userId, $hashedPassword);
+        // Determine if the input is an email or username
+        if (filter_var($inputUsername, FILTER_VALIDATE_EMAIL)) {
+            // If it's an email, find the user by email
+            $stmt = $pdo->prepare("SELECT id, password FROM users WHERE email = ?");
+            $stmt->execute([$inputUsername]);
+        } else {
+            // Otherwise, it is assumed to be a username
+            $stmt = $pdo->prepare("SELECT id, password FROM users WHERE email = ?");
+            $stmt->execute([$inputUsername]);
+        }
+        
+        $user = $stmt->fetch();
 
-        if ($stmt->fetch() && password_verify($password, $hashedPassword)) {
-            // Password is correct, start the session
-            $_SESSION['id'] = $userId;
-            header("Location: http://localhost/cartsy/index/test-9.php"); // Redirect to the profile page or dashboard
+        // If the user exists and the password matches
+        if ($user && password_verify($password, $user['password'])) {
+            $_SESSION['user_id'] = $user['id'];
+            header("Location: http://localhost/cartsy/index/beta_index.php"); // Redirect to the profile page or dashboard
             exit();
         } else {
-            $loginError = "Invalid username or password.";
+            $loginError = "Invalid email or password.";
         }
-        $stmt->close();
     }
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cartsy - Login</title>
-    <link rel="stylesheet" href="login.css" />
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Suranna&display=swap"
-      rel="stylesheet"
-    />
-  </head>
-  <body class="body">
-    <!-- Navbar -->
-    <nav class="navbar sticky-top navbar-expand-lg bg-body-tertiary p-3">
-      <div class="container-fluid brand">
-        <a class="navbar-brand suranna-regular" href="http://localhost/cartsy/index/test-7.php">
-          Cartsy
-        </a>
-      </div>
-    </nav>
-    
-    <!-- Login Form -->
-    <div class="container-fluid login-page">
-      <div class="background-image"></div>
-      <div class="row justify-content-center align-items-center vh-100">
-        <div class="col-lg-4 col-md-6 col-sm-8">
-          <div class="login-box p-4 shadow-lg rounded-3">
-            <h3 class="text-center mb-4">Login</h3>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Cartsy</title>
+  <link rel="stylesheet" href="login.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Suranna&display=swap" rel="stylesheet">
+</head>
+<body class="body">
 
-            <!-- Display login error (if any) -->
-            <?php if (!empty($loginError)): ?>
-            <div class="alert alert-danger"><?php echo $loginError; ?></div>
-            <?php endif; ?>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light p-3">
+  <div class="container-fluid brand">
+    <a class="navbar-brand suranna-regular" href="http://localhost/cartsy/index/test-7.php">
+      Cartsy
+    </a>
+  </div>
+</nav>
 
-            <!-- Login form with CSRF token -->
-            <form method="POST" action="">
-              <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+<div class="container-fluid">
+  <div class="background-image"></div>
+  <div class="row justify-content-center align-items-center vh-100">
+    <div class="col-lg-5 col-md-6 col-sm-8 col-10">
+      <div class="login-box p-4 shadow-lg rounded-3">
+        <h3 class="text-center mb-3">Login</h3>
+        <p class="text-center text-muted mb-4">Please enter your credentials</p>
 
-              <div class="mb-3">
-                <label for="username" class="form-label">Username</label>
-                <input
-                  type="text"
-                  id="username"
-                  name="username"
-                  class="form-control"
-                  value="<?php echo htmlspecialchars($inputUsername); ?>"
-                  required
-                />
-              </div>
-              <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  class="form-control"
-                  required
-                />
-              </div>
-              <button type="submit" class="btn btn-dark w-100">LOGIN</button>
-            </form>
+        <!-- Login Form -->
+        <form method="POST" id="loginForm">
+          <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
 
-            <p class="text-center mt-3">
-              No Account?
-              <a href="http://localhost/cartsy/signup/signup.php" class="text-danger">Sign Up Here</a>
-            </p>
+          <!-- Username Input -->
+          <div class="mb-3">
+            <label for="username" class="form-label">Email</label>
+            <input type="text" id="username" name="username" class="form-control" value="<?php echo htmlspecialchars($inputUsername); ?>" required />
           </div>
-        </div>
+
+          <!-- Password Input -->
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" id="password" name="password" class="form-control" required />
+          </div>
+
+          <!-- Display Error if any -->
+          <?php if ($loginError): ?>
+            <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
+          <?php endif; ?>
+
+          <!-- Submit Button -->
+          <button class="btn btn-dark w-100" type="submit">Login</button>
+        </form>
+
+        <!-- Signup Link -->
+        <p class="text-center mt-3">
+          Don't have an account? <a href="http://localhost/cartsy/signup/signup.php" class="text-danger">Sign up here</a>
+        </p>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Optional JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  </body>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
 </html>
