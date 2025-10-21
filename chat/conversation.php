@@ -1,9 +1,8 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/db_config.php';
-$pdo = db(); // Shared PDO connection
+$pdo = db();
 
-// ✅ Ensure the user is logged in
 if (empty($_SESSION['user_id'])) {
     header("Location: http://localhost/cartsy/login/login.php");
     exit();
@@ -11,49 +10,33 @@ if (empty($_SESSION['user_id'])) {
 
 $user_id = (int)$_SESSION['user_id'];
 
-// ✅ Fetch all conversations
+// ✅ Fetch unique conversations (buyer ↔ seller per product)
 $sql = "
     SELECT 
-        m.message_id,
-        m.sender_id,
-        m.receiver_id,
-        m.product_id,
-        m.message,
-        m.message_type,
-        m.latitude,
-        m.longitude,
-        m.image_path,
-        m.created_at,
-        u.name AS sender_name,
-        p.product_name,
+        CASE 
+            WHEN m.sender_id = ? THEN m.receiver_id
+            ELSE m.sender_id
+        END AS other_user_id,
+        u.name AS other_user_name,
         p.product_id,
-        pi.image_path AS thumbnail
+        p.product_name,
+        pi.image_path AS thumbnail,
+        MAX(m.created_at) AS last_message_time
     FROM messages m
-    LEFT JOIN users u ON u.id = m.sender_id
-    LEFT JOIN products p ON p.product_id = m.product_id
-    LEFT JOIN product_images pi ON pi.product_id = p.product_id
+    JOIN users u 
+        ON u.id = CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END
+    JOIN products p 
+        ON p.product_id = m.product_id
+    LEFT JOIN product_images pi 
+        ON pi.product_id = p.product_id
     WHERE (m.sender_id = ? OR m.receiver_id = ?)
-    GROUP BY p.product_id
-    ORDER BY m.created_at DESC
+    GROUP BY other_user_id, p.product_id
+    ORDER BY last_message_time DESC
 ";
 $stmt = $pdo->prepare($sql);
-$stmt->execute([$user_id, $user_id]);
-$messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$user_id, $user_id, $user_id, $user_id]);
 
-// ✅ Organize conversations
-$conversations = [];
-foreach ($messages as $row) {
-    $pid = $row['product_id'];
-    if (!isset($conversations[$pid])) {
-        $conversations[$pid] = [
-            'product_id' => $pid,
-            'product_name' => $row['product_name'] ?? 'Unknown Product',
-            'thumbnail' => $row['thumbnail'] ?? 'default-thumbnail.jpg',
-            'messages' => []
-        ];
-    }
-    $conversations[$pid]['messages'][] = $row;
-}
+$conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -104,12 +87,17 @@ foreach ($messages as $row) {
       <div class="mt-4">
         <h5 class="fw-semibold">Chats</h5>
         <ul class="list-unstyled" id="chat-sidebar">
-          <?php foreach ($conversations as $pid => $conv): ?>
-            <li class="d-flex align-items-center p-2 chat-item" data-product-id="<?= $pid ?>">
-              <img src="/cartsy/seller/<?= htmlspecialchars($conv['thumbnail']) ?>" 
+          <?php foreach ($conversations as $conv): ?>
+            <li class="d-flex align-items-center p-2 chat-item"
+                data-product-id="<?= htmlspecialchars($conv['product_id']) ?>"
+                data-other-id="<?= htmlspecialchars($conv['other_user_id']) ?>">
+              <img src="/cartsy/seller/<?= htmlspecialchars($conv['thumbnail'] ?? 'default-thumbnail.jpg') ?>" 
                    class="rounded-circle me-2" 
                    style="width: 40px; height: 40px; object-fit: cover;" />
-              <span><?= htmlspecialchars($conv['product_name']) ?></span>
+              <div>
+                <div class="fw-bold"><?= htmlspecialchars($conv['other_user_name']) ?></div>
+                <small class="text-muted"><?= htmlspecialchars($conv['product_name']) ?></small>
+              </div>
             </li>
           <?php endforeach; ?>
         </ul>
@@ -159,143 +147,131 @@ const sidebar = document.getElementById('chat-sidebar');
 const form = document.getElementById('message-form');
 const input = document.getElementById('message-input');
 let currentProductId = null;
+let currentOtherId = null;
 let autoRefreshEnabled = true;
 
-// ✅ Detect backreading to pause auto-refresh
+// Scroll behavior
 chatBox.addEventListener('scroll', () => {
   const distanceFromBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight;
   autoRefreshEnabled = distanceFromBottom < 100;
 });
 
-// ✅ Load messages
-function loadMessages(productId, preserveScroll = false) {
+// Load messages
+function loadMessages(productId, otherId, preserveScroll = false) {
   currentProductId = productId;
-  fetch(`fetch.php?product_id=${productId}`)
+  currentOtherId = otherId;
+  fetch(`fetch.php?product_id=${productId}&other_id=${otherId}`)
     .then(res => res.json())
     .then(data => {
-      const isNearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 100;
-      const previousScroll = chatBox.scrollTop;
-      const previousHeight = chatBox.scrollHeight;
-
       chatBox.innerHTML = '';
-
       data.forEach(msg => {
         const div = document.createElement('div');
         div.className = 'd-flex flex-column ' + 
           (msg.sender_id == <?= $user_id ?> ? 'align-items-end' : 'align-items-start') + ' mb-3';
-
-        let messageContent = '';
+        let content = '';
 
         if (msg.message_type === 'image' && msg.image_path) {
-          messageContent = `
-            <a href="${msg.image_path}" target="_blank">
-              <img src="${msg.image_path}" class="img-fluid rounded" style="max-width:200px; border:1px solid #ccc;"/>
-            </a>`;
+          content = `<a href="${msg.image_path}" target="_blank">
+                        <img src="${msg.image_path}" class="img-fluid rounded" style="max-width:200px; border:1px solid #ccc;"/>
+                     </a>`;
         } else if (msg.message_type === 'location' && msg.latitude && msg.longitude) {
           const mapId = 'map-' + msg.message_id;
-          messageContent = `
+          content = `
             <div style="width:200px; height:200px; border:1px solid #ccc; border-radius:10px;" id="${mapId}"></div>
             <small><a href="https://www.openstreetmap.org/?mlat=${msg.latitude}&mlon=${msg.longitude}" target="_blank">View on Map</a></small>
           `;
           setTimeout(() => {
             const map = L.map(mapId, { zoomControl: false }).setView([msg.latitude, msg.longitude], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              maxZoom: 19,
-              attribution: '&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
-            }).addTo(map);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
             L.marker([msg.latitude, msg.longitude]).addTo(map);
           }, 300);
         } else {
-          messageContent = msg.message;
+          content = msg.message;
         }
 
         div.innerHTML = `
           <div class="message ${msg.sender_id == <?= $user_id ?> ? 'sent' : 'received'}">
-            <strong>${msg.sender_id == <?= $user_id ?> ? 'You' : msg.sender_name}:</strong> 
-            ${messageContent}
+            <strong>${msg.sender_id == <?= $user_id ?> ? 'You' : msg.sender_name}:</strong> ${content}
           </div>`;
         chatBox.appendChild(div);
       });
-
-      if (preserveScroll) {
-        chatBox.scrollTop = previousScroll + (chatBox.scrollHeight - previousHeight);
-      } else if (isNearBottom) {
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }
+      chatBox.scrollTop = chatBox.scrollHeight;
     });
 }
 
-// ✅ Smart auto-refresh
+// Auto-refresh
 setInterval(() => {
-  if (currentProductId && autoRefreshEnabled) loadMessages(currentProductId, true);
+  if (currentProductId && currentOtherId && autoRefreshEnabled) loadMessages(currentProductId, currentOtherId, true);
 }, 3000);
 
-// ✅ Sidebar click
+// Sidebar click
 sidebar.addEventListener('click', e => {
-  const productId = e.target.closest('.chat-item')?.getAttribute('data-product-id');
-  if (productId) loadMessages(productId);
+  const item = e.target.closest('.chat-item');
+  if (!item) return;
+  const productId = item.getAttribute('data-product-id');
+  const otherId = item.getAttribute('data-other-id');
+  loadMessages(productId, otherId);
 });
 
-// ✅ Send text
+// Send text
 form.addEventListener('submit', e => {
   e.preventDefault();
-  if (!currentProductId) return;
+  if (!currentProductId || !currentOtherId) return;
   const message = input.value.trim();
   if (!message) return;
 
   fetch('send.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `product_id=${currentProductId}&message=${encodeURIComponent(message)}`
+    body: `product_id=${currentProductId}&receiver_id=${currentOtherId}&message=${encodeURIComponent(message)}`
   })
   .then(res => res.json())
   .then(data => {
     if (data.success) {
       input.value = '';
-      loadMessages(currentProductId);
+      loadMessages(currentProductId, currentOtherId);
     }
   });
 });
 
-// ✅ Image upload
+// Image upload
 document.getElementById('sendImageBtn').addEventListener('click', () => {
   document.getElementById('imageInput').click();
 });
 
 document.getElementById('imageInput').addEventListener('change', function () {
   const file = this.files[0];
-  if (!file || !currentProductId) return;
+  if (!file || !currentProductId || !currentOtherId) return;
 
   const formData = new FormData();
   formData.append('image', file);
   formData.append('product_id', currentProductId);
+  formData.append('receiver_id', currentOtherId);
 
   fetch('send_image.php', { method: 'POST', body: formData })
     .then(res => res.json())
     .then(data => {
-      if (data.success) loadMessages(currentProductId);
+      if (data.success) loadMessages(currentProductId, currentOtherId);
       else alert('Failed to send image');
     });
 });
 
-// ✅ Send dynamic location (Leaflet + OpenStreetMap)
+// Send dynamic location
 document.getElementById('sendLocationBtn').addEventListener('click', () => {
   if (!navigator.geolocation) {
-    alert("Geolocation not supported by your browser.");
+    alert("Geolocation not supported.");
     return;
   }
-
   navigator.geolocation.getCurrentPosition(pos => {
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
-
     fetch('send.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `product_id=${currentProductId}&message=${encodeURIComponent('📍 Shared Location')}&latitude=${lat}&longitude=${lon}&type=location`
+      body: `product_id=${currentProductId}&receiver_id=${currentOtherId}&message=${encodeURIComponent('📍 Shared Location')}&latitude=${lat}&longitude=${lon}&type=location`
     })
     .then(res => res.json())
-    .then(() => loadMessages(currentProductId));
+    .then(() => loadMessages(currentProductId, currentOtherId));
   });
 });
 </script>

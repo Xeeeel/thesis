@@ -1,107 +1,58 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/db_config.php';
-$pdo = db(); // Shared PDO connection
+$pdo = db();
 
-header('Content-Type: application/json');
-
-// ✅ Check login
 if (empty($_SESSION['user_id'])) {
     echo json_encode(['success' => false, 'error' => 'Not logged in']);
     exit;
 }
 
-$sender_id = (int)$_SESSION['user_id'];
-$product_id = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+$sender_id   = (int)$_SESSION['user_id'];
+$product_id  = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+$receiver_id = isset($_POST['receiver_id']) ? (int)$_POST['receiver_id'] : 0;
 
-if ($product_id <= 0) {
-    echo json_encode(['success' => false, 'error' => 'Invalid product ID']);
+if ($product_id <= 0 || $receiver_id <= 0) {
+    echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
     exit;
 }
 
-// ✅ Validate image file
-if (empty($_FILES['image']['tmp_name'])) {
+if (empty($_FILES['image']['name'])) {
     echo json_encode(['success' => false, 'error' => 'No image uploaded']);
     exit;
 }
 
-$image = $_FILES['image'];
-$uploadDir = __DIR__ . '/../uploads/';
-$allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-$ext = strtolower(pathinfo($image['name'], PATHINFO_EXTENSION));
-
-if (!in_array($ext, $allowed)) {
-    echo json_encode(['success' => false, 'error' => 'Invalid file type']);
-    exit;
+$upload_dir = __DIR__ . '/uploads/';
+if (!is_dir($upload_dir)) {
+    mkdir($upload_dir, 0777, true);
 }
 
-if (!is_dir($uploadDir)) {
-    mkdir($uploadDir, 0777, true);
-}
+$file_name = time() . '_' . basename($_FILES['image']['name']);
+$target_path = $upload_dir . $file_name;
+$image_path = "uploads/" . $file_name;
 
-// ✅ Generate unique filename
-$filename = uniqid('chat_') . '.' . $ext;
-$uploadPath = $uploadDir . $filename;
-$imagePathForDB = '/cartsy/uploads/' . $filename;
-
-// ✅ Move file to uploads folder
-if (!move_uploaded_file($image['tmp_name'], $uploadPath)) {
-    echo json_encode(['success' => false, 'error' => 'Failed to upload image']);
-    exit;
-}
-
-try {
-    // ✅ Get product’s seller
-    $stmt = $pdo->prepare("SELECT seller_id FROM products WHERE product_id = ?");
-    $stmt->execute([$product_id]);
-    $product = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$product) {
-        echo json_encode(['success' => false, 'error' => 'Product not found']);
-        exit;
-    }
-
-    $seller_id = (int)$product['seller_id'];
-
-    // ✅ Determine receiver
-    if ($sender_id === $seller_id) {
-        // Seller → find last buyer
+if (move_uploaded_file($_FILES['image']['tmp_name'], $target_path)) {
+    try {
         $stmt = $pdo->prepare("
-            SELECT DISTINCT sender_id 
-            FROM messages 
-            WHERE product_id = ? AND sender_id != ? 
-            ORDER BY created_at DESC 
-            LIMIT 1
+            INSERT INTO messages 
+                (sender_id, receiver_id, product_id, message, message_type, image_path, created_at)
+            VALUES 
+                (:sender_id, :receiver_id, :product_id, '', 'image', :image_path, NOW())
         ");
-        $stmt->execute([$product_id, $sender_id]);
-        $lastBuyer = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->execute([
+            ':sender_id' => $sender_id,
+            ':receiver_id' => $receiver_id,
+            ':product_id' => $product_id,
+            ':image_path' => $image_path
+        ]);
 
-        if (!$lastBuyer) {
-            echo json_encode(['success' => false, 'error' => 'No buyer found to message']);
-            exit;
-        }
+        echo json_encode(['success' => true, 'image_path' => $image_path]);
 
-        $receiver_id = (int)$lastBuyer['sender_id'];
-    } else {
-        // Buyer → seller
-        $receiver_id = $seller_id;
+    } catch (PDOException $e) {
+        error_log("Send Image Error: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Database error']);
     }
-
-    // ✅ Insert into messages table
-    $sql = "INSERT INTO messages 
-            (sender_id, receiver_id, product_id, message, message_type, image_path, created_at)
-            VALUES (:sender_id, :receiver_id, :product_id, '', 'image', :image_path, NOW())";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':sender_id' => $sender_id,
-        ':receiver_id' => $receiver_id,
-        ':product_id' => $product_id,
-        ':image_path' => $imagePathForDB
-    ]);
-
-    echo json_encode(['success' => true, 'path' => $imagePathForDB]);
-} catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+} else {
+    echo json_encode(['success' => false, 'error' => 'Failed to upload image']);
 }
 ?>
