@@ -7,10 +7,6 @@ $loginError = "";
 $inputUsername = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // CSRF Token validation (if necessary)
-    if ($_POST['csrf_token'] != $_SESSION['csrf_token']) {
-        die("Invalid CSRF token!");
-    }
 
     $inputUsername = trim($_POST['username']);
     $password = trim($_POST['password']);
@@ -26,7 +22,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->execute([$inputUsername]);
         } else {
             // Otherwise, it is assumed to be a username
-            $stmt = $pdo->prepare("SELECT id, password FROM users WHERE email = ?");
+            $stmt = $pdo->prepare("SELECT id, password FROM users WHERE username = ?");
             $stmt->execute([$inputUsername]);
         }
         
@@ -35,10 +31,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // If the user exists and the password matches
         if ($user && password_verify($password, $user['password'])) {
             $_SESSION['user_id'] = $user['id'];
-            header("Location: http://localhost/cartsy/index/beta_index.php"); // Redirect to the profile page or dashboard
+            header("Location: http://localhost/cartsy/index/beta_index.php"); // Redirect after successful login
             exit();
         } else {
-            $loginError = "Invalid email or password.";
+            $loginError = "Invalid username/email or password.";
         }
     }
 }
@@ -59,7 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light p-3">
   <div class="container-fluid brand">
-    <a class="navbar-brand suranna-regular" href="http://localhost/cartsy/index/test-7.php">
+    <a class="navbar-brand suranna-regular" href="http://localhost/cartsy/index/beta_index.php">
       Cartsy
     </a>
   </div>
@@ -69,18 +65,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   <div class="background-image"></div>
   <div class="row justify-content-center align-items-center vh-100">
     <div class="col-lg-5 col-md-6 col-sm-8 col-10">
-      <div class="login-box p-4 shadow-lg rounded-3">
+      <div class="login-box p-4 m-auto shadow-lg rounded-3" style="width: 70%">
         <h3 class="text-center mb-3">Login</h3>
         <p class="text-center text-muted mb-4">Please enter your credentials</p>
 
         <!-- Login Form -->
         <form method="POST" id="loginForm">
-          <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
 
-          <!-- Username Input -->
+          <!-- Username or Email Input -->
           <div class="mb-3">
-            <label for="username" class="form-label">Email</label>
-            <input type="text" id="username" name="username" class="form-control" value="<?php echo htmlspecialchars($inputUsername); ?>" required />
+            <label for="username" class="form-label">Username or Email</label>
+            <input type="text" id="username" name="username" class="form-control" 
+                   value="<?php echo htmlspecialchars($inputUsername); ?>" required />
           </div>
 
           <!-- Password Input -->
@@ -100,7 +96,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         <!-- Signup Link -->
         <p class="text-center mt-3">
-          Don't have an account? <a href="http://localhost/cartsy/signup/signup.php" class="text-danger">Sign up here</a>
+          Don't have an account? 
+          <a href="http://localhost/cartsy/signup/signup.php" class="text-danger">Sign up here</a>
         </p>
       </div>
     </div>

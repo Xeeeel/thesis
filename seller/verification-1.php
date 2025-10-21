@@ -1,74 +1,78 @@
 <?php
 session_start();
+require_once __DIR__ . '/../config/db_config.php'; // Include your shared PDO connection
+$pdo = db(); // Get PDO connection
 
-// Database connection
-$servername = "localhost";
-$username = "root";  // Replace with your DB username
-$password = "";      // Replace with your DB password
-$dbname = "cartsy";  // Database name
-
-$conn = new mysqli($servername, $username, $password, $dbname);
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+// Ensure the user is logged in
+if (empty($_SESSION['user_id'])) {
+    header("Location: http://localhost/cartsy/login/login.php");
+    exit();
 }
 
-// Initialize variables
 $upload_success = false;
-$upload_error = false;
+$upload_error = "";
 
-// Check if the form is submitted
-if (isset($_POST['submit'])) {
-    // Handle front side file upload
-    if (isset($_FILES['id_front']) && $_FILES['id_front']['error'] === 0) {
-        $front_name = $_FILES['id_front']['name'];
-        $front_tmp_name = $_FILES['id_front']['tmp_name'];
-        $front_ext = pathinfo($front_name, PATHINFO_EXTENSION);
+// Handle file uploads
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
+
+    // Create uploads directory if it doesn’t exist
+    $upload_dir = __DIR__ . '/uploads/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+
+    // Initialize file paths
+    $front_file_path = null;
+    $back_file_path = null;
+
+    // Upload front side
+    if (!empty($_FILES['id_front']['name']) && $_FILES['id_front']['error'] === UPLOAD_ERR_OK) {
+        $front_ext = pathinfo($_FILES['id_front']['name'], PATHINFO_EXTENSION);
         $front_new_name = uniqid('id_front_', true) . '.' . $front_ext;
-        $front_upload_dir = 'uploads/';  // Ensure this directory exists
+        $front_target = $upload_dir . $front_new_name;
 
-        // Move the uploaded file to the uploads directory
-        if (move_uploaded_file($front_tmp_name, $front_upload_dir . $front_new_name)) {
-            $front_file_path = $front_upload_dir . $front_new_name;
+        if (move_uploaded_file($_FILES['id_front']['tmp_name'], $front_target)) {
+            $front_file_path = 'uploads/' . $front_new_name;
         } else {
-            $upload_error = "Error uploading front file.";
+            $upload_error = "Error uploading front ID image.";
         }
     }
 
-    // Handle back side file upload
-    if (isset($_FILES['id_back']) && $_FILES['id_back']['error'] === 0) {
-        $back_name = $_FILES['id_back']['name'];
-        $back_tmp_name = $_FILES['id_back']['tmp_name'];
-        $back_ext = pathinfo($back_name, PATHINFO_EXTENSION);
+    // Upload back side
+    if (!empty($_FILES['id_back']['name']) && $_FILES['id_back']['error'] === UPLOAD_ERR_OK) {
+        $back_ext = pathinfo($_FILES['id_back']['name'], PATHINFO_EXTENSION);
         $back_new_name = uniqid('id_back_', true) . '.' . $back_ext;
-        $back_upload_dir = 'uploads/';  // Ensure this directory exists
+        $back_target = $upload_dir . $back_new_name;
 
-        // Move the uploaded file to the uploads directory
-        if (move_uploaded_file($back_tmp_name, $back_upload_dir . $back_new_name)) {
-            $back_file_path = $back_upload_dir . $back_new_name;
+        if (move_uploaded_file($_FILES['id_back']['tmp_name'], $back_target)) {
+            $back_file_path = 'uploads/' . $back_new_name;
         } else {
-            $upload_error = "Error uploading back file.";
+            $upload_error = "Error uploading back ID image.";
         }
     }
 
-    // Assuming user is logged in, get user ID from session
-    $user_id = $_SESSION['id'];  // Make sure user_id is stored in session after login
+    // Save file paths in database if uploads succeeded
+    if ($front_file_path && $back_file_path) {
+        $user_id = $_SESSION['user_id'];
 
-    // Save file paths in the database
-    if (isset($front_file_path) && isset($back_file_path)) {
-        $sql = "UPDATE users SET id_front = '$front_file_path', id_back = '$back_file_path' WHERE id = '$user_id'";
+        try {
+            $stmt = $pdo->prepare("UPDATE users SET id_front = :front, id_back = :back WHERE id = :id");
+            $stmt->execute([
+                ':front' => $front_file_path,
+                ':back' => $back_file_path,
+                ':id' => $user_id
+            ]);
 
-        if ($conn->query($sql) === TRUE) {
-            // Redirect to the new page after successful upload
+            // Redirect after successful upload
             header("Location: http://localhost/cartsy/index/test-9.php");
-            exit();  // Always call exit() after header() to stop further script execution
-        } else {
-            $upload_error = "Error saving to database: " . $conn->error;
+            exit();
+        } catch (PDOException $e) {
+            $upload_error = "Database error: " . $e->getMessage();
         }
+    } elseif (empty($upload_error)) {
+        $upload_error = "Please upload both front and back ID images.";
     }
-
 }
-
-$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -80,14 +84,8 @@ $conn->close();
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
   <style>
-    body {
-      background-color: #140026;
-    }
-
-    .upload-box {
-      flex: 1;
-    }
-
+    body { background-color: #140026; }
+    .upload-box { flex: 1; }
     .upload-area {
       border: 2px dashed #ccc;
       border-radius: 10px;
@@ -96,27 +94,18 @@ $conn->close();
       cursor: pointer;
       transition: border-color 0.3s, background-color 0.3s;
     }
-
     .upload-area:hover {
       border-color: #ffc107;
       background-color: #fffbe6;
     }
-
-    .upload-icon {
-      font-size: 30px;
-      color: #6c757d;
+    .upload-icon { font-size: 30px; color: #6c757d; }
+    .upload-area img {
+      max-width: 200px;
+      max-height: 200px;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
     }
-
-    /* Ensure consistent image size for uploaded previews */
-.upload-area img {
-  max-width: 200px;  /* Set the max width */
-  max-height: 200px; /* Set the max height */
-  width: 100%;       /* Ensure the width is 100% of the container */
-  height: auto;      /* Maintain aspect ratio */
-  border-radius: 8px;
-}
-
-
     .nav-tabs .nav-link.active {
       border: none;
       border-bottom: 3px solid #ffc107;
@@ -124,38 +113,18 @@ $conn->close();
       color: #000;
       font-weight: 600;
     }
-
     .nav-tabs .nav-link {
       border: none;
       color: #6c757d;
       font-weight: 500;
     }
-
-    .nav-tabs .nav-link:hover {
-      color: #ffc107;
-    }
-
-    .btn-warning {
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-
-    .badge {
-      font-size: 0.75rem;
-    }
-
+    .nav-tabs .nav-link:hover { color: #ffc107; }
+    .btn-warning { font-weight: 600; letter-spacing: 1px; }
+    .badge { font-size: 0.75rem; }
     @media (max-width: 768px) {
-      .d-flex.p-4 {
-        flex-direction: column;
-      }
-      .pe-4.border-end {
-        border: none !important;
-        padding-right: 0 !important;
-        margin-bottom: 2rem;
-      }
-      .ps-4 {
-        padding-left: 0 !important;
-      }
+      .d-flex.p-4 { flex-direction: column; }
+      .pe-4.border-end { border: none !important; padding-right: 0 !important; margin-bottom: 2rem; }
+      .ps-4 { padding-left: 0 !important; }
     }
   </style>
 </head>
@@ -172,7 +141,7 @@ $conn->close();
         <div class="pe-4 border-end" style="width: 100%; max-width: 400px;">
           <h4 class="fw-bold">Verification</h4>
           <p class="mt-3 text-secondary" style="font-size: 0.95rem;">
-            For your protection and to prevent fraud, we need to verify your identity using an official government-issued document (such as an ID card, driver's license, or passport). Verifying your identity helps us keep your account secure, ensures you can recover it if necessary, and makes certain that any gifts or rewards reach the correct address.
+            For your protection and to prevent fraud, we need to verify your identity using an official government-issued document (such as an ID card, driver's license, or passport). Verifying your identity helps us keep your account secure and ensures any transactions or rewards go to the right person.
           </p>
           <div class="mt-4 d-flex align-items-center gap-2">
             <i class="bi bi-lock-fill text-secondary"></i>
@@ -182,27 +151,18 @@ $conn->close();
 
         <!-- Right Panel -->
         <div class="ps-4" style="flex: 1;">
-          <!-- Tabs -->
           <ul class="nav nav-tabs border-0 mb-3">
-            <li class="nav-item">
-              <a class="nav-link active" data-bs-toggle="tab" href="#">ID card</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" data-bs-toggle="tab" href="#">Residence permit</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" data-bs-toggle="tab" href="#">Passport</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" data-bs-toggle="tab" href="#">Driver's License</a>
-            </li>
+            <li class="nav-item"><a class="nav-link active" href="#">ID Card</a></li>
+            <li class="nav-item"><a class="nav-link" href="#">Residence Permit</a></li>
+            <li class="nav-item"><a class="nav-link" href="#">Passport</a></li>
+            <li class="nav-item"><a class="nav-link" href="#">Driver's License</a></li>
           </ul>
 
           <p class="text-secondary">Take a photo of your ID card</p>
 
-          <form action="" method="post" enctype="multipart/form-data">
+          <form method="POST" enctype="multipart/form-data">
             <div class="d-flex gap-4 flex-wrap">
-              <!-- Front Side Upload -->
+              <!-- Front Upload -->
               <div class="upload-box text-center">
                 <p class="fw-semibold">Front Side</p>
                 <div class="upload-area" onclick="document.getElementById('id_front').click();">
@@ -213,16 +173,14 @@ $conn->close();
                     <span class="badge bg-light text-dark">JPG</span>
                     <span class="badge bg-light text-dark">PDF</span>
                   </div>
-                  <!-- Hidden File Input -->
                   <input type="file" id="id_front" name="id_front" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="previewImage(this, 'frontPreview');" />
-                  <!-- Image Preview -->
                   <div id="frontPreview" class="mt-3" style="display: none;">
-                    <img id="frontImage" src="#" alt="Front Image" class="img-fluid" style="max-width: 100%; border-radius: 8px;" />
+                    <img id="frontImage" src="#" alt="Front Image" />
                   </div>
                 </div>
               </div>
 
-              <!-- Back Side Upload -->
+              <!-- Back Upload -->
               <div class="upload-box text-center">
                 <p class="fw-semibold">Back Side</p>
                 <div class="upload-area" onclick="document.getElementById('id_back').click();">
@@ -233,24 +191,19 @@ $conn->close();
                     <span class="badge bg-light text-dark">JPG</span>
                     <span class="badge bg-light text-dark">PDF</span>
                   </div>
-                  <!-- Hidden File Input -->
                   <input type="file" id="id_back" name="id_back" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="previewImage(this, 'backPreview');" />
-                  <!-- Image Preview -->
                   <div id="backPreview" class="mt-3" style="display: none;">
-                    <img id="backImage" src="#" alt="Back Image" class="img-fluid" style="max-width: 100%; border-radius: 8px;" />
+                    <img id="backImage" src="#" alt="Back Image" />
                   </div>
                 </div>
               </div>
             </div>
 
-            <?php if ($upload_success): ?>
-              <div class="alert alert-success mt-3">Files uploaded successfully!</div>
-            <?php elseif ($upload_error): ?>
-              <div class="alert alert-danger mt-3"><?php echo $upload_error; ?></div>
+            <?php if (!empty($upload_error)): ?>
+              <div class="alert alert-danger mt-3"><?= htmlspecialchars($upload_error) ?></div>
             <?php endif; ?>
 
             <div class="text-center mt-4">
-              <!-- Submit button inside the form -->
               <button class="btn btn-warning px-5 py-2 shadow" type="submit" name="submit">SUBMIT</button>
             </div>
           </form>
@@ -261,29 +214,16 @@ $conn->close();
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
   <script>
     function previewImage(input, previewId) {
-      var file = input.files[0];
-      var reader = new FileReader();
-
+      const file = input.files[0];
+      const reader = new FileReader();
       reader.onload = function(e) {
-        var preview = document.getElementById(previewId);
-        var img = document.createElement('img');
-        img.src = e.target.result;
-
-        // Apply CSS class that controls image size
-        img.classList.add('img-fluid');
-
-        // Show the preview
-        preview.innerHTML = '';  // Clear previous preview
-        preview.appendChild(img);
+        const preview = document.getElementById(previewId);
+        preview.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded-3" />`;
         preview.style.display = 'block';
-      }
-
-      if (file) {
-        reader.readAsDataURL(file);
-      }
+      };
+      if (file) reader.readAsDataURL(file);
     }
   </script>
 </body>

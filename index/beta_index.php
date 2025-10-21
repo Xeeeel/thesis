@@ -11,7 +11,7 @@ if (empty($_SESSION['user_id'])) {
 
 // Fetch user data based on the user ID from the session
 $userId = $_SESSION['user_id'];
-$stmt = $pdo->prepare("SELECT id, email, name FROM users WHERE id = ?");
+$stmt = $pdo->prepare("SELECT id, email, seller_status, name FROM users WHERE id = ?");
 $stmt->execute([$userId]);
 $user = $stmt->fetch();
 
@@ -227,7 +227,7 @@ $products = $stmt->fetchAll();
             // Conditionally set the URL based on the user's seller status
             if ($seller_status === 'pending') {
                 // Redirect to verification page if seller_status is 'pending'
-                $sell_url = 'http://localhost/cartsy/seller/test-1.php'; // Update this with your verification page URL
+                $sell_url = 'http://localhost/cartsy/seller/identity-1.php'; // Update this with your verification page URL
             } else {
                 // Otherwise, link to the regular selling page
                 $sell_url = 'http://localhost/cartsy/seller/test-1-0.php'; // Update this URL as per your create listing page
@@ -236,7 +236,7 @@ $products = $stmt->fetchAll();
             <a href="<?= $sell_url ?>" class="btn btn-outline-dark me-3">Sell</a>
 
             <!-- Saved Products Button -->
-            <a href="http://localhost/cartsy/saved/test-6.php" class="btn btn-outline-danger me-3">
+            <a href="http://localhost/cartsy/saved/saved.php" class="btn btn-outline-danger me-3">
                 <i class="bi bi-heart-fill"></i>
             </a>
 
@@ -245,7 +245,7 @@ $products = $stmt->fetchAll();
                 <a href="http://localhost/cartsy/chat/conversation.php">
                     <i class="bi bi-chat fs-4 me-3"></i>
                 </a>
-                <a href="http://localhost/cartsy/profile/index-7.php">
+                <a href="http://localhost/cartsy/profile/profile_v1.php">
                     <i class="bi bi-person-circle fs-4"></i>
                 </a>
             </div>

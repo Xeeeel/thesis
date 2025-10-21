@@ -1,34 +1,22 @@
 <?php
-// Start session
 session_start();
+require_once __DIR__ . '/../config/db_config.php';
+$pdo = db();
 
-// Database connection
-$host = 'localhost';
-$user = 'root';
-$password = '';
-$dbname = 'cartsy';
-
-$conn = new mysqli($host, $user, $password, $dbname);
-
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+// Optional: ensure admin is logged in
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: http://localhost/cartsy/admin/login.php");
+    exit();
 }
 
-// Fetching data for the table (Sellers)
-$sql = "SELECT id, name, username, email, registered_date, verification_status FROM users";
-$result = $conn->query($sql);
-$sellers = [];
-
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $sellers[] = $row;
-    }
+// Fetch sellers data using PDO
+try {
+    $stmt = $pdo->query("SELECT id, name, email, registered_date, seller_status FROM users");
+    $sellers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    die("Database query failed: " . $e->getMessage());
 }
-
-$conn->close();
 ?>
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -105,13 +93,13 @@ $conn->close();
       background-color: #f1f1f1;
       color: #333;
     }
+
     .table-responsive {
-    max-height: 300px; /* Adjust this value according to the desired height */
-    overflow-y: auto;
+      max-height: 300px;
+      overflow-y: auto;
     }
 
-    .table td,
-    .table th {
+    .table td, .table th {
       vertical-align: middle;
     }
 
@@ -152,7 +140,7 @@ $conn->close();
       ❗ Customer Report
     </a>
     <!-- Logout link at the bottom -->
-    <a href="login.php" class="logout-icon d-flex align-items-center text-danger">
+    <a href="logout.php" class="logout-icon d-flex align-items-center text-danger">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-box-arrow-left me-2" viewBox="0 0 16 16">
         <path fill-rule="evenodd" d="M10 15a1 1 0 0 0 1-1v-2h-1v2H2V2h8v2h1V2a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8z"/>
         <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
@@ -162,80 +150,78 @@ $conn->close();
   </div>
 
   <!-- Main Content -->
-  <!-- Main Content -->
-    <div class="main-content">
+  <div class="main-content">
     <div class="header mb-4">
-        <h3>Sellers Account Approval</h3>
+      <h3>Sellers Account Approval</h3>
     </div>
 
     <div class="card p-4">
-        <label for="statusFilter" class="form-label">Filter by Status:</label>
-        <select id="statusFilter" class="form-select mb-3" style="max-width: 200px;">
+      <label for="statusFilter" class="form-label">Filter by Status:</label>
+      <select id="statusFilter" class="form-select mb-3" style="max-width: 200px;">
         <option value="">All</option>
         <option value="pending">Pending</option>
         <option value="approved">Approved</option>
         <option value="rejected">Rejected</option>
-        </select>
+      </select>
 
-        <!-- Search Bar -->
-        <label for="searchBar" class="form-label">Search Products:</label>
-        <input type="text" id="searchBar" class="form-control mb-3" placeholder="Search by Product Name, Seller, or Category">
+      <!-- Search Bar -->
+      <label for="searchBar" class="form-label">Search Seller:</label>
+      <input type="text" id="searchBar" class="form-control mb-3" placeholder="Search by Seller Name, or Email">
 
-        <!-- Scrollable Table -->
-        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+      <!-- Scrollable Table -->
+      <div class="table-responsive">
         <table class="table table-hover table-bordered bg-white">
-            <thead class="table-light">
+          <thead class="table-light">
             <tr>
-                <th>#</th>
-                <th>Seller Name</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Registration Date</th>
-                <th>Verification Status</th>
-                <th>Action</th>
+              <th>#</th>
+              <th>Seller Name</th>
+              <th>Email</th>
+              <th>Registration Date</th>
+              <th>Verification Status</th>
+              <th>Action</th>
             </tr>
-            </thead>
-            <tbody id="productTable">
+          </thead>
+          <tbody id="sellerTable">
             <?php foreach ($sellers as $index => $seller): ?>
-                <tr>
-                <td><?php echo $index + 1; ?></td>
-                <td><?php echo htmlspecialchars($seller['name']); ?></td>
-                <td>@<?php echo htmlspecialchars($seller['username']); ?></td>
-                <td><?php echo htmlspecialchars($seller['email']); ?></td>
-                <td><?php echo date('F j, Y', strtotime($seller['registered_date'])); ?></td>
+              <tr>
+                <td><?= $index + 1 ?></td>
+                <td><?= htmlspecialchars($seller['name']) ?></td>
+                <td><?= htmlspecialchars($seller['email']) ?></td>
+                <td><?= htmlspecialchars(date('F j, Y', strtotime($seller['registered_date']))) ?></td>
                 <td>
-                    <span class="badge <?php echo $seller['verification_status'] === 'approved' ? 'badge-approved' : ($seller['verification_status'] === 'rejected' ? 'badge-rejected' : 'badge-pending'); ?>">
-                    <?php echo ucfirst($seller['verification_status']); ?>
-                    </span>
+                  <span class="badge 
+                    <?= $seller['seller_status'] === 'approved' ? 'badge-approved' : 
+                    ($seller['seller_status'] === 'rejected' ? 'badge-rejected' : 'badge-pending'); ?>">
+                    <?= ucfirst($seller['seller_status']) ?>
+                  </span>
                 </td>
-                <td><a href="account_review.php?id=<?php echo $seller['id']; ?>" class="btn btn-sm btn-outline-primary">View</a></td>
-
-                </tr>
+                <td>
+                  <a href="account_review.php?id=<?= $seller['id'] ?>" class="btn btn-sm btn-outline-primary">View</a>
+                </td>
+              </tr>
             <?php endforeach; ?>
-            </tbody>
+          </tbody>
         </table>
-        </div>
+      </div>
     </div>
-    </div>
+  </div>
 
-
-  <!-- JavaScript for Filtering and Searching -->
   <script>
     const searchInput = document.getElementById('searchBar');
     const statusFilter = document.getElementById('statusFilter');
-    const tableRows = document.querySelectorAll('#productTable tr');
+    const tableRows = document.querySelectorAll('#sellerTable tr');
 
     function filterTable() {
       const searchTerm = searchInput.value.toLowerCase();
       const status = statusFilter.value;
 
       tableRows.forEach(row => {
-        const sellerName = row.cells[1].textContent.toLowerCase();
+        const name = row.cells[1].textContent.toLowerCase();
         const username = row.cells[2].textContent.toLowerCase();
         const email = row.cells[3].textContent.toLowerCase();
         const badge = row.cells[5].textContent.toLowerCase();
 
-        const matchesSearch = sellerName.includes(searchTerm) || username.includes(searchTerm) || email.includes(searchTerm);
+        const matchesSearch = name.includes(searchTerm) || username.includes(searchTerm) || email.includes(searchTerm);
         const matchesStatus = !status || badge.includes(status);
 
         row.style.display = matchesSearch && matchesStatus ? '' : 'none';
@@ -245,6 +231,5 @@ $conn->close();
     searchInput.addEventListener('input', filterTable);
     statusFilter.addEventListener('change', filterTable);
   </script>
-
 </body>
 </html>

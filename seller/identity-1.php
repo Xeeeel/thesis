@@ -1,59 +1,63 @@
 <?php
-session_start(); // Start session to access $_SESSION["id"]
+session_start();
+require_once __DIR__ . '/../config/db_config.php'; // Use shared PDO connection
+$pdo = db(); // Connect using your db_config.php function
 
-// Handle form submission
+// Make sure user is logged in
+if (empty($_SESSION['user_id'])) {
+    header("Location: http://localhost/cartsy/login/login.php");
+    exit();
+}
+
+$error = "";
+$success = "";
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $first_name = $_POST['first_name'];
-  $middle_name = $_POST['middle_name'];
-  $last_name = $_POST['last_name'];
-  $gender = $_POST['gender'];
-  $birth_month = $_POST['birth_month'];
-  $birth_day = $_POST['birth_day'];
-  $birth_year = $_POST['birth_year'];
-  $phone_number = $_POST['phone_number'];
-  $address = $_POST['address'];
+    $first_name = trim($_POST['first_name']);
+    $middle_name = trim($_POST['middle_name']);
+    $last_name = trim($_POST['last_name']);
+    $gender = $_POST['gender'];
+    $birth_month = $_POST['birth_month'];
+    $birth_day = $_POST['birth_day'];
+    $birth_year = $_POST['birth_year'];
+    $phone_number = trim($_POST['phone_number']);
+    $address = trim($_POST['address']);
 
-  // Combine full name
-  $full_name = trim("$first_name $middle_name $last_name");
+    // Combine full name
+    $full_name = trim("$first_name $middle_name $last_name");
 
-  // Connect to database
-  $conn = new mysqli('localhost', 'root', '', 'cartsy');
-  if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-  }
+    // Get logged-in user ID
+    $user_id = $_SESSION['user_id'];
 
-  // Make sure session ID is available
-  if (isset($_SESSION["id"])) {
-    $user_id = $_SESSION["id"];
+    try {
+        // Update the user record securely with PDO
+        $stmt = $pdo->prepare("
+            UPDATE users 
+            SET name = :name, gender = :gender, birth_month = :birth_month, 
+                birth_day = :birth_day, birth_year = :birth_year, 
+                phone_number = :phone_number, address = :address, 
+                registered_date = NOW() 
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':name' => $full_name,
+            ':gender' => $gender,
+            ':birth_month' => $birth_month,
+            ':birth_day' => $birth_day,
+            ':birth_year' => $birth_year,
+            ':phone_number' => $phone_number,
+            ':address' => $address,
+            ':id' => $user_id
+        ]);
 
-    date_default_timezone_set('Asia/Manila'); // Use your desired time zone
-    $registered_date = date('Y-m-d H:i:s');
-
-
-    // Update user info in the database
-    $stmt = $conn->prepare("UPDATE users SET name=?, gender=?, birth_month=?, birth_day=?, birth_year=?, phone_number=?, address=?, registered_date=? WHERE id=?");
-    $stmt->bind_param("sssissssi", $full_name, $gender, $birth_month, $birth_day, $birth_year, $phone_number, $address, $registered_date, $user_id);
-
-    if ($stmt->execute()) {
-      $stmt->close();
-      $conn->close();
-      // Redirect to next verification page
-      header("Location: verification-1.php");
-      exit();
-    } else {
-      $error = "Error saving data: " . $stmt->error;
-      $stmt->close();
+        // Redirect to next verification page
+        header("Location: verification-1.php");
+        exit();
+    } catch (PDOException $e) {
+        $error = "Error saving data: " . $e->getMessage();
     }
-  } else {
-    $error = "User not logged in.";
-  }
-
-  $conn->close();
 }
 ?>
-
-
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -104,8 +108,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="container d-flex justify-content-center align-items-center min-vh-100">
     <div class="card col-md-8 shadow">
       <h3 class="mb-4">Verification</h3>
-      <?php if (isset($success)) echo "<div class='alert alert-success'>$success</div>"; ?>
-      <?php if (isset($error)) echo "<div class='alert alert-danger'>$error</div>"; ?>
+
+      <?php if (!empty($success)): ?>
+        <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
+      <?php endif; ?>
+
+      <?php if (!empty($error)): ?>
+        <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+      <?php endif; ?>
+
       <form method="POST">
         <div class="row g-3">
           <div class="col-md-6">

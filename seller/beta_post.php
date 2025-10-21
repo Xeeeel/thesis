@@ -1,0 +1,322 @@
+<?php
+session_start();
+require_once __DIR__ . '/../config/db_config.php';
+$pdo = db(); // ✅ use shared PDO connection
+
+// ✅ Check login
+if (empty($_SESSION['user_id'])) {
+    header("Location: http://localhost/cartsy/login/login.php");
+    exit();
+}
+
+$user_id = $_SESSION['user_id'];
+
+// ✅ Fetch user info
+$stmt = $pdo->prepare("SELECT name, profile_picture, seller_status FROM users WHERE id = :id");
+$stmt->execute([':id' => $user_id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// ✅ Fallback defaults
+$seller_name = $user['name'] ?? "Guest Seller";
+$seller_image = !empty($user['profile_picture'])
+    ? "http://localhost/cartsy/profile/" . htmlspecialchars($user['profile_picture'])
+    : "https://via.placeholder.com/50";
+
+// ✅ Handle form submission
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $title = trim($_POST["title"]);
+    $price = (float)$_POST["price"];
+    $category = $_POST["category"];
+    $condition_status = $_POST["condition"];
+    $location = $_POST["location"];
+    $deal = $_POST["deal"];
+    $description = $_POST["description"];
+    $thumbnail = "";
+
+    try {
+        $pdo->beginTransaction();
+
+        // Insert product
+        $stmt = $pdo->prepare("
+            INSERT INTO products (product_name, price, category, condition_name, location, description, seller_id, thumbnail, deal)
+            VALUES (:name, :price, :category, :condition_name, :location, :description, :seller_id, :thumbnail, :deal)
+        ");
+        $stmt->execute([
+            ':name' => $title,
+            ':price' => $price,
+            ':category' => $category,
+            ':condition_name' => $condition_status,
+            ':location' => $location,
+            ':description' => $description,
+            ':seller_id' => $user_id,
+            ':thumbnail' => $thumbnail,
+            ':deal' => $deal
+        ]);
+
+        $product_id = $pdo->lastInsertId();
+
+        // ✅ Handle images
+        if (!empty($_FILES['images']['name'][0])) {
+            $target_dir = __DIR__ . "/uploads/";
+            if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
+
+            foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
+                if (!empty($_FILES['images']['name'][$key])) {
+                    $image_name = basename($_FILES["images"]["name"][$key]);
+                    $image_path = "uploads/" . uniqid() . "_" . $image_name;
+                    move_uploaded_file($tmp_name, $target_dir . basename($image_path));
+
+                    // First image = thumbnail
+                    if ($key === 0) {
+                        $thumbnail = $image_path;
+                        $update = $pdo->prepare("UPDATE products SET thumbnail = :thumb WHERE product_id = :id");
+                        $update->execute([':thumb' => $thumbnail, ':id' => $product_id]);
+                    }
+
+                    // Save to images table
+                    $imgStmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (:pid, :path)");
+                    $imgStmt->execute([':pid' => $product_id, ':path' => $image_path]);
+                }
+            }
+        }
+
+        $pdo->commit();
+        echo "<script>alert('Product added successfully!'); window.location.href='http://localhost/cartsy/seller/test-1-0.php';</script>";
+        exit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo "<script>alert('Error saving product: " . addslashes($e->getMessage()) . "');</script>";
+    }
+}
+?>
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartsy - Item for Sale</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Suranna&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .navbar { background-color: #ffffff; border-bottom: 1px solid #e0e0e0; padding: 1rem 2rem; }
+        .navbar-brand { font-family: "Suranna", serif; font-size: 30px; color: #343a40; }
+        .sidebar, .preview-box { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        .btn-custom { background-color: #d4af37; border: none; transition: 0.3s; }
+        .btn-custom:hover { background-color: #b8962e; }
+        .upload-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 120px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .upload-box:hover {
+            background-color: #f1f3f5;
+        }
+
+        .upload-box p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 16px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .preview-container img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar sticky-top navbar-light">
+        <div class="container-fluid">
+            <!-- Brand -->
+            <a class="navbar-brand fs-3" href="http://localhost/cartsy/index/test-9.php">Cartsy</a>
+
+            <!-- Search Bar with Button Inside -->
+            <form class="d-flex flex-grow-1 mx-3" action="http://localhost/cartsy/search-product/test-4.php" method="GET">
+                <div class="input-group">
+                    <input class="form-control" type="search" name="query" placeholder="Search" required>
+                    <button class="btn btn-dark" type="submit">Search</button>
+                </div>
+            </form>
+
+            <!-- Sell Button -->
+            <a href="http://localhost/cartsy/seller/test-1.php" class="btn btn-outline-dark me-3">Sell</a>
+
+            <!-- Saved Products Button -->
+            <a href="http://localhost/cartsy/saved/test-6.php" class="btn btn-outline-danger me-3">
+                <i class="bi bi-heart-fill"></i>
+            </a>
+
+            <!-- Chat and Profile Icons -->
+            <div>
+                <a href="http://localhost/cartsy/chat/conversation.php">
+                    <i class="bi bi-chat fs-4 me-3"></i>
+                </a>
+                <a href="http://localhost/cartsy/profile/index-7.php">
+                    <i class="bi bi-person-circle fs-4"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="sidebar">
+                    <h4>Item for Sale</h4>
+                    <div class="d-flex align-items-center mb-3">
+                        <img src="<?= htmlspecialchars($seller_image) ?>" class="rounded-circle me-2" alt="User" width="50">
+                        <div><strong><?= htmlspecialchars($seller_name) ?></strong><br><small>Listing to Cartsy</small></div>
+                    </div>
+
+                    <form method="POST" enctype="multipart/form-data">
+                        <label class="upload-box" for="file-upload">
+                            <p>Add Photos</p>
+                        </label>
+                        <input type="file" id="file-upload" name="images[]" accept="image/*" multiple onchange="previewImages(event)">
+                        <div class="preview-container" id="preview-container"></div>
+                        <input type="text" class="form-control mb-3" name="title" placeholder="Title" required>
+                        <input type="number" class="form-control mb-3" name="price" placeholder="Price" required>
+                        <select class="form-select mb-3" name="category" required>
+                            <option value="">Select Category</option>
+                            <option value="Women's Apparel">Women's Apparel</option>
+                            <option value="Men's Apparel">Men's Apparel</option>
+                            <option value="Laptops & Computers">Laptops & Computers</option>
+                            <option value="School & Office Supplies">School & Office Supplies</option>
+                            <option value="Home & Living">Home & Living</option>
+                            <option value="Home Appliances">Home Appliances</option>
+                            <option value="Health & Personal Care">Health & Personal Care</option>
+                            <option value="Books & Magazines">Books & Magazines</option>
+                        </select>
+                        <select class="form-select mb-3" name="condition" required>
+                            <option value="">Select Condition</option>
+                            <option value="New">New</option>
+                            <option value="Used - Like New">Used - Like New</option>
+                            <option value="Used - Good">Used - Good</option>
+                            <option value="Used - Fair">Used - Fair</option>
+                        </select>
+                        <input type="text" class="form-control mb-3" name="location" placeholder="Location" required>
+                        <select class="form-select mb-3" name="deal" required>
+                            <option value="">Select Deal Option</option>
+                            <option value="Meetup">Meetup</option>
+                            <option value="Delivery">Delivery</option>
+                        </select>
+                        <textarea class="form-control mb-3" name="description" placeholder="Enter product description" rows="4" required></textarea>
+                        <button type="submit" class="btn btn-warning btn-custom w-100">Publish</button>
+                    </form>
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <script>
+    // Function to update the preview in real-time
+    function updatePreview() {
+        document.getElementById("preview-title").innerText = document.querySelector("input[name='title']").value || "Product Title";
+        document.getElementById("preview-price").innerText = "₱" + (document.querySelector("input[name='price']").value || "0");
+        document.getElementById("preview-description").innerText = document.querySelector("textarea[name='description']").value || "Product Description";
+        document.getElementById("preview-category").innerText = document.querySelector("select[name='category']").value || "Category";
+        document.getElementById("preview-condition").innerText = document.querySelector("select[name='condition']").value || "Condition";
+        document.getElementById("preview-location").innerText = document.querySelector("input[name='location']").value || "Location";
+        document.getElementById("preview-deal-option").innerText = document.querySelector("select[name='deal']").value || "Deal Option";
+    }
+    
+    // Function to preview images in real-time
+    function previewImages(event) {
+        const previewContainer = document.getElementById("preview-image");
+        previewContainer.src = "https://via.placeholder.com/300"; // Default image
+        
+        if (event.target.files.length > 0) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                previewContainer.src = e.target.result;
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+    }
+    
+    // Attach event listeners for real-time preview updates
+    document.querySelector("input[name='title']").addEventListener("input", updatePreview);
+    document.querySelector("input[name='price']").addEventListener("input", updatePreview);
+    document.querySelector("textarea[name='description']").addEventListener("input", updatePreview);
+    document.querySelector("select[name='category']").addEventListener("change", updatePreview);
+    document.querySelector("select[name='condition']").addEventListener("change", updatePreview);
+    document.querySelector("input[name='location']").addEventListener("input", updatePreview);
+    document.querySelector("select[name='deal']").addEventListener("change", updatePreview);
+    document.querySelector("input[name='images[]']").addEventListener("change", previewImages);
+</script>
+
+<!-- Updated preview box -->
+<div class="preview-box">
+    <h5>Preview</h5>
+    <div class="row">
+        <div class="col-md-6">
+            <img id="preview-image" src="https://via.placeholder.com/300" class="img-fluid rounded" alt="Product">
+        </div>
+        <div class="col-md-6">
+            <h4 id="preview-title">Product Title</h4>
+            <h5 id="preview-price" class="text-danger">₱0</h5>
+            <p>No local taxes included</p>
+            <button class="btn btn-warning btn-custom mb-2"><i class="bi bi-chat-dots"></i> Message</button>
+            <button class="btn btn-dark mb-2"><i class="bi bi-flag"></i> Report</button>
+            <h6>Category: <span id="preview-category">Category</span></h6>
+            <h6>Condition: <span id="preview-condition">Condition</span></h6>
+            <h6>Location: <span id="preview-location">Location</span></h6>
+            <h6>Deal Option: <span id="preview-deal-option">Deal Option</span></h6>
+            
+            
+            <h6 class="mt-3">Product Description</h6>
+            <p id="preview-description">Product Description</p>
+        </div>
+    </div>
+</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function previewImages(event) {
+            const previewContainer = document.getElementById("preview-container");
+            previewContainer.innerHTML = "";
+
+            for (let file of event.target.files) {
+                let reader = new FileReader();
+                reader.onload = function (e) {
+                    let img = document.createElement("img");
+                    img.src = e.target.result;
+                    previewContainer.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    </script>
+</body>
+</html>
