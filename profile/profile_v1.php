@@ -110,7 +110,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <nav class="navbar sticky-top navbar-light">
   <div class="container-fluid">
-    <a class="navbar-brand fs-3" href="http://localhost/cartsy/index/test-9.php">Cartsy</a>
+    <a class="navbar-brand fs-3" href="http://localhost/cartsy/index/beta_index.php">Cartsy</a>
 
     <form class="d-flex flex-grow-1 mx-3" action="http://localhost/cartsy/search-product/test-4.php" method="GET">
       <div class="input-group">

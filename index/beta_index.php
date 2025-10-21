@@ -212,7 +212,7 @@ $products = $stmt->fetchAll();
     <nav class="navbar sticky-top navbar-light">
         <div class="container-fluid">
             <!-- Brand -->
-            <a class="navbar-brand fs-3" href="http://localhost/cartsy/index/test-9.php">Cartsy</a>
+            <a class="navbar-brand fs-3" href="http://localhost/cartsy/index/test-9.php">Dealora</a>
 
             <!-- Search Bar with Button Inside -->
             <form class="d-flex flex-grow-1 mx-3" action="http://localhost/cartsy/search-product/test-4.php" method="GET">

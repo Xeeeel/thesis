@@ -1,38 +1,41 @@
 <?php
 session_start();
+require_once __DIR__ . '/../config/db_config.php';
+$pdo = db();
 
-// Ensure the user is logged in
-if (!isset($_SESSION['id'])) {
-    die("You need to log in to send a message.");
+if (empty($_SESSION['user_id'])) {
+    die("You must be logged in to view messages.");
 }
 
-$buyer_id = $_SESSION['id'];
-$product_id = isset($_GET['product_id']) ? intval($_GET['product_id']) : 0;
+$user_id = (int)$_SESSION['user_id'];
+$product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
 
-// Connect to the database
-$conn = new mysqli('localhost', 'root', '', 'cartsy');
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if ($product_id <= 0) {
+    die("Invalid product ID.");
 }
 
-// Fetch messages for the selected product
-$sql = "SELECT messages.*, users.name AS sender_name
-        FROM messages
-        LEFT JOIN users ON users.id = messages.sender_id
-        WHERE messages.product_id = ?
-        ORDER BY messages.created_at ASC";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $product_id);
-$stmt->execute();
-$result = $stmt->get_result();
+// ✅ Fetch all messages for this product
+$sql = "
+    SELECT 
+        m.message_id,
+        m.sender_id,
+        m.receiver_id,
+        m.product_id,
+        m.message,
+        m.image_path,
+        m.message_type,
+        m.created_at,
+        u.name AS sender_name
+    FROM messages m
+    LEFT JOIN users u ON u.id = m.sender_id
+    WHERE m.product_id = ?
+    ORDER BY m.created_at ASC
+";
+$stmt = $pdo->prepare($sql);
+$stmt->execute([$product_id]);
+$messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$messages = [];
-while ($row = $result->fetch_assoc()) {
-    $messages[] = $row;
-}
-
-$conn->close();
-
-// Return messages as JSON
+// ✅ Return as JSON
+header('Content-Type: application/json');
 echo json_encode($messages);
 ?>
