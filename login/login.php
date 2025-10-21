@@ -17,21 +17,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         // Determine if the input is an email or username
         if (filter_var($inputUsername, FILTER_VALIDATE_EMAIL)) {
-            // If it's an email, find the user by email
-            $stmt = $pdo->prepare("SELECT id, password FROM users WHERE email = ?");
+            $stmt = $pdo->prepare("SELECT id, password, name FROM users WHERE email = ?");
             $stmt->execute([$inputUsername]);
         } else {
-            // Otherwise, it is assumed to be a username
-            $stmt = $pdo->prepare("SELECT id, password FROM users WHERE username = ?");
+            $stmt = $pdo->prepare("SELECT id, password, name FROM users WHERE username = ?");
             $stmt->execute([$inputUsername]);
         }
-        
+
         $user = $stmt->fetch();
 
         // If the user exists and the password matches
         if ($user && password_verify($password, $user['password'])) {
             $_SESSION['user_id'] = $user['id'];
-            header("Location: http://localhost/cartsy/index/beta_index.php"); // Redirect after successful login
+
+            // Check if user has a name
+            if (empty($user['name']) || is_null($user['name'])) {
+                header("Location: http://localhost/cartsy/profile/profile_v1.php");
+            } else {
+                header("Location: http://localhost/cartsy/index/beta_index.php");
+            }
             exit();
         } else {
             $loginError = "Invalid username/email or password.";
@@ -68,32 +72,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <div class="login-box p-4 m-auto shadow-lg rounded-3" style="width: 70%">
         <h3 class="text-center mb-3">Login</h3>
         <p class="text-center text-muted mb-4">Please enter your credentials</p>
-<!-- Display Error if any -->
-          <?php if ($loginError): ?>
-            <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
-          <?php endif; ?>
+        
+        <!-- Display Error if any -->
+        <?php if ($loginError): ?>
+          <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
+        <?php endif; ?>
+        
         <!-- Login Form -->
         <form method="POST" id="loginForm">
-
-          <!-- Username or Email Input -->
           <div class="mb-3">
             <label for="username" class="form-label">Username or Email</label>
             <input type="text" id="username" name="username" class="form-control" 
-                   value="<?php echo htmlspecialchars($inputUsername); ?>" required />
+                   value="<?= htmlspecialchars($inputUsername); ?>" required />
           </div>
 
-          <!-- Password Input -->
           <div class="mb-3">
             <label for="password" class="form-label">Password</label>
             <input type="password" id="password" name="password" class="form-control" required />
           </div>
 
-
-          <!-- Submit Button -->
           <button class="btn btn-dark w-100" type="submit">Login</button>
         </form>
 
-        <!-- Signup Link -->
         <p class="text-center mt-3">
           Don't have an account? 
           <a href="http://localhost/cartsy/signup/signup.php" class="text-danger">Sign up here</a>
