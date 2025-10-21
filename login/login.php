@@ -68,7 +68,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <div class="login-box p-4 m-auto shadow-lg rounded-3" style="width: 70%">
         <h3 class="text-center mb-3">Login</h3>
         <p class="text-center text-muted mb-4">Please enter your credentials</p>
-
+<!-- Display Error if any -->
+          <?php if ($loginError): ?>
+            <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
+          <?php endif; ?>
         <!-- Login Form -->
         <form method="POST" id="loginForm">
 
@@ -85,10 +88,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <input type="password" id="password" name="password" class="form-control" required />
           </div>
 
-          <!-- Display Error if any -->
-          <?php if ($loginError): ?>
-            <div class="alert alert-danger"><?= htmlspecialchars($loginError) ?></div>
-          <?php endif; ?>
 
           <!-- Submit Button -->
           <button class="btn btn-dark w-100" type="submit">Login</button>
