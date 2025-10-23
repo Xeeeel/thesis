@@ -57,6 +57,49 @@ $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
     .received { background-color: #ffffff; align-self: flex-start; }
     .navbar { background-color: #fff; border-bottom: 1px solid #ddd; padding: 1rem 2rem; }
     .navbar-brand { font-family: "Suranna", serif; font-size: 30px; color: #343a40; }
+
+    /* ===== iPhone-style Location Sheet (scoped) ===== */
+    .loc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:9999}
+    .loc-sheet{position:absolute;inset:0;display:flex;flex-direction:column}
+    .loc-head{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;color:#fff}
+    .loc-title{font-weight:700}
+    .loc-done{color:#0a84ff;font-weight:600;cursor:pointer}
+    .loc-search-wrap{padding:0 16px}
+    .loc-search{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2a3141;background:#0f1320;color:#eaeef7}
+    #loc-map{flex:1;margin:12px 16px;border-radius:16px;overflow:hidden;border:1px solid #2a3141}
+    .loc-foot{padding:12px 16px 18px;display:flex;flex-direction:column;gap:10px}
+    .loc-cta{width:100%;padding:14px;border:0;border-radius:14px;font-weight:700;font-size:16px;background:#0a84ff;color:#fff;cursor:pointer}
+    .loc-cta-ghost{background:#0e1118;color:#eaeef7;border:1px solid #2a3141}
+
+    /* Floating mini live map (only when live tracking is active) */
+    #liveMapWrap {
+      position: fixed;
+      right: 16px;
+      bottom: 90px;
+      width: 240px;
+      height: 240px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15);
+      overflow: hidden;
+      display: none;
+      z-index: 1000;
+    }
+    #liveMapHeader {
+      font-weight: 600;
+      font-size: 14px;
+      padding: 6px 10px;
+      background: #111827;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #liveMap { width: 100%; height: calc(100% - 32px); }
+    #btnStopLive {
+      background: transparent; border: 0; color: #fff; cursor: pointer; font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -139,6 +182,25 @@ $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
   </div>
 </div>
 
+<!-- ===== Location Sheet Markup ===== -->
+<div id="locOverlay" class="loc-overlay">
+  <div class="loc-sheet">
+    <div class="loc-head">
+      <div class="loc-title">Location</div>
+      <div class="loc-done" id="locDone">Done</div>
+    </div>
+    <div class="loc-search-wrap">
+      <input id="locSearch" class="loc-search" placeholder="Find a place or address">
+    </div>
+    <div id="loc-map"></div>
+    <div class="loc-foot">
+      <button id="btnSendPin" class="loc-cta">Send location</button>
+      <button id="btnShareLive" class="loc-cta loc-cta-ghost">Start sharing live location</button>
+    </div>
+  </div>
+</div>
+<!-- ================================ -->
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
@@ -149,17 +211,18 @@ const input = document.getElementById('message-input');
 let currentProductId = null;
 let currentOtherId = null;
 let autoRefreshEnabled = true;
+const USER_ID = <?= (int)$user_id ?>;
 
-// Scroll behavior
+/* ================= Base chat behavior ================= */
 chatBox.addEventListener('scroll', () => {
   const distanceFromBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight;
   autoRefreshEnabled = distanceFromBottom < 100;
 });
 
-// Load messages
-function loadMessages(productId, otherId, preserveScroll = false) {
+function loadMessages(productId, otherId) {
   currentProductId = productId;
-  currentOtherId = otherId;
+  currentOtherId   = otherId;
+
   fetch(`fetch.php?product_id=${productId}&other_id=${otherId}`)
     .then(res => res.json())
     .then(data => {
@@ -167,18 +230,19 @@ function loadMessages(productId, otherId, preserveScroll = false) {
       data.forEach(msg => {
         const div = document.createElement('div');
         div.className = 'd-flex flex-column ' + 
-          (msg.sender_id == <?= $user_id ?> ? 'align-items-end' : 'align-items-start') + ' mb-3';
-        let content = '';
+          (msg.sender_id == USER_ID ? 'align-items-end' : 'align-items-start') + ' mb-3';
 
+        let content = '';
         if (msg.message_type === 'image' && msg.image_path) {
           content = `<a href="${msg.image_path}" target="_blank">
-                        <img src="${msg.image_path}" class="img-fluid rounded" style="max-width:200px; border:1px solid #ccc;"/>
+                       <img src="${msg.image_path}" class="img-fluid rounded" style="max-width:200px; border:1px solid #ccc;"/>
                      </a>`;
         } else if (msg.message_type === 'location' && msg.latitude && msg.longitude) {
+          // render a static Leaflet map inside this bubble (do NOT refresh this later)
           const mapId = 'map-' + msg.message_id;
           content = `
             <div style="width:200px; height:200px; border:1px solid #ccc; border-radius:10px;" id="${mapId}"></div>
-            <small><a href="https://www.openstreetmap.org/?mlat=${msg.latitude}&mlon=${msg.longitude}" target="_blank">View on Map</a></small>
+            <small><a href="https://www.openstreetmap.org/?mlat=${msg.latitude}&mlon=${msg.longitude}" target="_blank" rel="noopener">View on OpenStreetMap</a></small>
           `;
           setTimeout(() => {
             const map = L.map(mapId, { zoomControl: false }).setView([msg.latitude, msg.longitude], 15);
@@ -186,12 +250,14 @@ function loadMessages(productId, otherId, preserveScroll = false) {
             L.marker([msg.latitude, msg.longitude]).addTo(map);
           }, 300);
         } else {
-          content = msg.message;
+          const span = document.createElement('span'); 
+          span.textContent = msg.message || '';
+          content = span.outerHTML;
         }
 
         div.innerHTML = `
-          <div class="message ${msg.sender_id == <?= $user_id ?> ? 'sent' : 'received'}">
-            <strong>${msg.sender_id == <?= $user_id ?> ? 'You' : msg.sender_name}:</strong> ${content}
+          <div class="message ${msg.sender_id == USER_ID ? 'sent' : 'received'}">
+            <strong>${msg.sender_id == USER_ID ? 'You' : msg.sender_name}:</strong> ${content}
           </div>`;
         chatBox.appendChild(div);
       });
@@ -199,12 +265,10 @@ function loadMessages(productId, otherId, preserveScroll = false) {
     });
 }
 
-// Auto-refresh
 setInterval(() => {
-  if (currentProductId && currentOtherId && autoRefreshEnabled) loadMessages(currentProductId, currentOtherId, true);
+  if (currentProductId && currentOtherId && autoRefreshEnabled) loadMessages(currentProductId, currentOtherId);
 }, 3000);
 
-// Sidebar click
 sidebar.addEventListener('click', e => {
   const item = e.target.closest('.chat-item');
   if (!item) return;
@@ -213,7 +277,7 @@ sidebar.addEventListener('click', e => {
   loadMessages(productId, otherId);
 });
 
-// Send text
+/* ================= Sending text & images ================= */
 form.addEventListener('submit', e => {
   e.preventDefault();
   if (!currentProductId || !currentOtherId) return;
@@ -234,11 +298,9 @@ form.addEventListener('submit', e => {
   });
 });
 
-// Image upload
 document.getElementById('sendImageBtn').addEventListener('click', () => {
   document.getElementById('imageInput').click();
 });
-
 document.getElementById('imageInput').addEventListener('change', function () {
   const file = this.files[0];
   if (!file || !currentProductId || !currentOtherId) return;
@@ -256,24 +318,225 @@ document.getElementById('imageInput').addEventListener('change', function () {
     });
 });
 
-// Send dynamic location
-document.getElementById('sendLocationBtn').addEventListener('click', () => {
-  if (!navigator.geolocation) {
-    alert("Geolocation not supported.");
-    return;
+/* ================= Location modal elements ================= */
+const sendLocationBtn = document.getElementById('sendLocationBtn');
+const locOverlay  = document.getElementById('locOverlay');
+const locDone     = document.getElementById('locDone');
+const locSearch   = document.getElementById('locSearch');
+const btnSendPin  = document.getElementById('btnSendPin');   // Send location (meeting pin)
+const btnShare    = document.getElementById('btnShareLive'); // Start sharing live location (exact GPS once)
+
+let locMap, locMarker;
+
+/* open modal */
+sendLocationBtn.addEventListener('click', () => {
+  if (!currentProductId || !currentOtherId) { alert('Select a conversation first.'); return; }
+  locOverlay.style.display = 'block';
+  setTimeout(initLocMap, 60);
+});
+locDone.addEventListener('click', () => { locOverlay.style.display = 'none'; });
+
+function initLocMap() {
+  if (!locMap) {
+    locMap = L.map('loc-map', { zoomControl: true }).setView([14.8791, 120.4569], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(locMap);
+    locMap.on('click', e => {
+      if (locMarker) locMap.removeLayer(locMarker);
+      locMarker = L.marker(e.latlng).addTo(locMap);
+    });
   }
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      locMap.setView([pos.coords.latitude, pos.coords.longitude], 16);
+    }, ()=>{}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 });
+  }
+}
+
+/* Search (Enter) — precise, centers & drops pin, fixes sizing */
+async function geocodePlace(q) {
+  if (!q) return;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+
+    if (!Array.isArray(data) || !data[0]) {
+      alert('Place not found. Try a more specific name or address.');
+      return;
+    }
+
+    const lat = parseFloat(data[0].lat);
+    const lon = parseFloat(data[0].lon);
+
+    if (!locMap) initLocMap();
+
+    locMap.setView([lat, lon], 16);
+    setTimeout(() => locMap.invalidateSize(true), 0);
+
+    if (locMarker) locMap.removeLayer(locMarker);
+    locMarker = L.marker([lat, lon]).addTo(locMap);
+  } catch (e) {
+    console.error(e);
+    alert('Search failed. Please try again.');
+  }
+}
+
+// Press Enter to search; prevent default so nothing else intercepts it
+locSearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    geocodePlace(locSearch.value.trim());
+  }
+});
+
+/* ============== 1) Send meeting pin (send once) ============== */
+btnSendPin.addEventListener('click', async () => {
+  if (!locMarker) { alert('Tap the map to drop a pin first.'); return; }
+  const { lat, lng } = locMarker.getLatLng();
+
+  const body = new URLSearchParams();
+  body.set('product_id', currentProductId);
+  body.set('receiver_id', currentOtherId);
+  body.set('message', `📍 Meeting point: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+  body.set('latitude',  lat);
+  body.set('longitude', lng);
+  body.set('type', 'location');
+
+  btnSendPin.disabled = true;
+  const res = await fetch('send.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  const data = await res.json();
+  btnSendPin.disabled = false;
+
+  if (data.success) {
+    locOverlay.style.display = 'none';
+    loadMessages(currentProductId, currentOtherId);
+  }
+});
+
+/* ===========================================================
+   2) Start sharing live location (send once, separate preview)
+   - Sends your current GPS once (message bubble is static)
+   - Shows a floating Leaflet mini-map that updates ONLY there
+   - Adds jitter filter (~15m) to reduce laptop Wi-Fi/IP drift
+=========================================================== */
+let livePreviewWrap = null, livePreviewMap = null, livePreviewMarker = null, livePreviewTimer = null;
+let lastLiveLat = null, lastLiveLon = null;
+
+function ensureLivePreview() {
+  if (livePreviewWrap) return;
+
+  const css = document.createElement('style');
+  css.textContent = `
+    #livePreviewWrap {
+      position: fixed; right: 16px; bottom: 90px; width: 260px; height: 260px;
+      background: #fff; border:1px solid #ddd; border-radius:12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15); overflow: hidden; z-index: 1000; display: none;
+    }
+    #livePreviewHeader {
+      height: 32px; display:flex; align-items:center; justify-content:space-between;
+      background:#111827; color:#fff; padding: 0 10px; font-weight:600; font-size:14px;
+    }
+    #livePreviewMap { width: 100%; height: calc(100% - 32px); }
+    #btnCloseLivePreview { background: transparent; border: 0; color: #fff; cursor: pointer; font-size: 13px; }
+  `;
+  document.head.appendChild(css);
+
+  livePreviewWrap = document.createElement('div');
+  livePreviewWrap.id = 'livePreviewWrap';
+  livePreviewWrap.innerHTML = `
+    <div id="livePreviewHeader">
+      <span>🔵 Your live position</span>
+      <button id="btnCloseLivePreview" title="Hide">Hide</button>
+    </div>
+    <div id="livePreviewMap"></div>
+  `;
+  document.body.appendChild(livePreviewWrap);
+
+  document.getElementById('btnCloseLivePreview').addEventListener('click', () => {
+    livePreviewWrap.style.display = 'none';
+    if (livePreviewTimer) clearInterval(livePreviewTimer);
+    livePreviewTimer = null;
+  });
+}
+
+function startLiveVisualRefresh(initialLat, initialLon) {
+  ensureLivePreview();
+
+  // show container first so Leaflet can measure it
+  livePreviewWrap.style.display = 'block';
+
+  // create the map once, centered on initial position
+  if (!livePreviewMap) {
+    livePreviewMap = L.map('livePreviewMap', { zoomControl: true }).setView([initialLat, initialLon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: ''
+    }).addTo(livePreviewMap);
+    livePreviewMarker = L.marker([initialLat, initialLon]).addTo(livePreviewMap);
+
+    requestAnimationFrame(() => {
+      livePreviewMap.invalidateSize(true);
+      livePreviewMap.setView([initialLat, initialLon], 16);
+    });
+  } else {
+    livePreviewMarker.setLatLng([initialLat, initialLon]);
+    livePreviewMap.setView([initialLat, initialLon], Math.max(livePreviewMap.getZoom(), 16));
+    livePreviewMap.invalidateSize(true);
+  }
+
+  lastLiveLat = initialLat;
+  lastLiveLon = initialLon;
+
+  // clear any prior timer and start smooth updates (front-end only)
+  if (livePreviewTimer) clearInterval(livePreviewTimer);
+  livePreviewTimer = setInterval(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      // ✅ jitter filter (~15m)
+      const dLat = lat - lastLiveLat;
+      const dLon = lon - lastLiveLon;
+      const distanceMeters = Math.sqrt(dLat * dLat + dLon * dLon) * 111000;
+      if (distanceMeters < 15) return;
+
+      lastLiveLat = lat;
+      lastLiveLon = lon;
+
+      livePreviewMarker.setLatLng([lat, lon]);
+      livePreviewMap.panTo([lat, lon], { animate: true, duration: 0.5 });
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 });
+  }, 5000);
+}
+
+/* click: send once + show floating preview (no DB spam, no bubble refresh) */
+btnShare.addEventListener('click', () => {
+  if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
+  if (!currentProductId || !currentOtherId) { alert("Select a conversation first."); return; }
+
   navigator.geolocation.getCurrentPosition(pos => {
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
+
+    // 1) send ONE location message (bubble remains static)
     fetch('send.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `product_id=${currentProductId}&receiver_id=${currentOtherId}&message=${encodeURIComponent('📍 Shared Location')}&latitude=${lat}&longitude=${lon}&type=location`
+      body: `product_id=${currentProductId}&receiver_id=${currentOtherId}&message=${encodeURIComponent('📡 Live location shared')}&latitude=${lat}&longitude=${lon}&type=location`
     })
     .then(res => res.json())
-    .then(() => loadMessages(currentProductId, currentOtherId));
-  });
+    .then(() => {
+      locOverlay.style.display = 'none';
+      loadMessages(currentProductId, currentOtherId);
+
+      // 2) start visual-only updates, centered right away
+      startLiveVisualRefresh(lat, lon);
+    });
+  }, () => { alert("Unable to get your location."); }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 });
 });
 </script>
+
+
+
 </body>
 </html>
